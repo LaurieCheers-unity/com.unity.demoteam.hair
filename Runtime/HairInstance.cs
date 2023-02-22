@@ -1111,7 +1111,7 @@ namespace Unity.DemoTeam.Hair
 					var materialInstancePendingPasses = HairMaterialUtility.TryCompileCountPassesPending(materialInstance);
 					if (materialInstancePendingPasses > 0)
 					{
-						CoreUtils.SetKeyword(materialInstance, "HAIR_VERTEX_ID_LINES", settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.BuiltinLines || settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHairRenderer);
+						CoreUtils.SetKeyword(materialInstance, "HAIR_VERTEX_ID_LINES", settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.BuiltinLines || settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHighQualityLines);
 						UpdateMaterialState(materialInstance, settingsSystem, settingsStrands, solverData, volumeData);
 					}
 #endif
@@ -1142,7 +1142,6 @@ namespace Unity.DemoTeam.Hair
 						}
 						break;
 
-					case SettingsSystem.StrandRenderer.HDRPHairRenderer:
 					case SettingsSystem.StrandRenderer.BuiltinLines:
 					case SettingsSystem.StrandRenderer.HDRPHighQualityLines:
 						{
@@ -1211,28 +1210,36 @@ namespace Unity.DemoTeam.Hair
 					}
 
 					meshRendererHDRP.enabled = true;
-					meshRendererHDRP.rendererGroup = settingsSystem.strandRendererGroup;
 					meshRendererHDRP.enableHighQualityLineRendering = (settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHighQualityLines);
+
+					meshRendererHDRP.rendererGroup = settingsSystem.strandRendererGroupingValue;
+					meshRendererHDRP.rendererLODMode = LineRendering.RendererLODMode.CameraDistance;
+					meshRendererHDRP.rendererLODCameraDistanceCurve = settingsSystem.strandRendererCameraDistanceLODCurve;
+					meshRendererHDRP.shadingSampleFraction = settingsSystem.strandRendererShadingFraction;
 				}
 #endif
-				var meshRendererEnabled = false;
-#if HAS_PACKAGE_UNITY_HDRP_15
-							meshRendererHDRP.enabled = meshRendererHDRPEnabled = true;
-							meshRendererHDRP.mesh = meshInstance;
-							//meshRendererHDRP.rasterMode = settingsSystem.strandRendererMode;
-							meshRendererHDRP.renderingLayerMask = (uint)settingsSystem.strandLayers;
-							meshRendererHDRP.groupMerging = settingsSystem.strandRendererGrouping;
-						}
+			}
+
+			// update renderer bounds
+			{
+#if UNITY_2021_2_OR_NEWER
+				// starting with 2021.2 we can override renderer bounds directly
+				meshRenderer.bounds = GetSimulationBounds();
+#else
 				// prior to 2021.2 it was only possible to set renderer bounds indirectly via mesh bounds
 				if (mesh != null && meshShared == false)
 					mesh.bounds = GetSimulationBounds().WithTransform(meshFilter.transform.worldToLocalMatrix);
-						break;
+
 				//TODO provide better local bounds
 				//mesh.bounds = GetSimulationBounds(worldSquare: false, worldToLocalTransform: meshFilter.transform.worldToLocalMatrix);
+#endif
+			}
 		}
-#if HAS_PACKAGE_UNITY_HDRP_15
-					meshRendererHDRP.enabled = false;
-					meshRendererHDRP.shadowCastingMode = ShadowCastingMode.Off;
+
+		static void UpdateMaterialState(Material materialInstance, in SettingsSystem settingsSystem, in SettingsStrands settingsStrands, in HairSim.SolverData solverData, in HairSim.VolumeData volumeData)
+		{
+			HairSim.BindSolverData(materialInstance, solverData);
+			HairSim.BindVolumeData(materialInstance, volumeData);
 
 			materialInstance.SetTexture("_UntypedVolumeDensity", volumeData.volumeDensity);
 			materialInstance.SetTexture("_UntypedVolumeVelocity", volumeData.volumeVelocity);

@@ -634,6 +634,7 @@ namespace Unity.DemoTeam.Hair
 			// done
 			return info;
 		}
+
 		public static unsafe void BuildStrandGroupAlembic(ref HairAsset.StrandGroup strandGroup, in HairAsset hairAsset, AlembicCurves[] alembicCurveSets, ref int alembicCurveSetIndex)
 		{
 			ref readonly var settings = ref hairAsset.settingsAlembic;
@@ -1566,7 +1567,7 @@ namespace Unity.DemoTeam.Hair
 			return true;// success
 		}
 
-		static unsafe void Resample(Vector3* srcPos, Vector2* srcUV, int srcCount, Vector3* dstPos, Vector2* dstUV, int dstCount, int iterations, bool resampleUV)
+		static unsafe void Resample(Vector3* srcPos, int srcCount, Vector3* dstPos, int dstCount, int iterations)
 		{
 			var length = 0.0f;
 			{
@@ -1579,7 +1580,7 @@ namespace Unity.DemoTeam.Hair
 			var dstLength = length;
 			var dstSpacing = dstLength / (dstCount - 1);
 
-			ResampleWithHint(srcPos, srcUV, srcCount, out var srcIndex, dstPos, srcUV, dstCount, out var dstIndex, dstSpacing, resampleUV);
+			ResampleWithHint(srcPos, srcCount, out var srcIndex, dstPos, dstCount, out var dstIndex, dstSpacing);
 
 			// run a couple of iterations
 			for (int i = 0; i != iterations; i++)
@@ -1591,7 +1592,7 @@ namespace Unity.DemoTeam.Hair
 					dstLength = (dstIndex - 1) * dstSpacing + remainder;
 					dstSpacing = dstLength / (dstCount - 1);
 
-					ResampleWithHint(srcPos, srcUV, srcCount, out srcIndex, dstPos, dstUV, dstCount, out dstIndex, dstSpacing, resampleUV);
+					ResampleWithHint(srcPos, srcCount, out srcIndex, dstPos, dstCount, out dstIndex, dstSpacing);
 				}
 				else
 				{
@@ -1613,15 +1614,10 @@ namespace Unity.DemoTeam.Hair
 			}
 		}
 
-		static unsafe void ResampleWithHint(Vector3* srcPos, Vector2* srcUV, int srcCount, out int srcIndex, Vector3* dstPos, Vector2* dstUV, int dstCount, out int dstIndex, float dstSpacing, bool resampleUV)
+		static unsafe void ResampleWithHint(Vector3* srcPos, int srcCount, out int srcIndex, Vector3* dstPos, int dstCount, out int dstIndex, float dstSpacing)
 		{
 			dstPos[0] = srcPos[0];
-			
-			// begin hack
-			if (resampleUV)
-				dstUV[0] = srcUV[0];
-			// end hack
-			
+
 			dstIndex = 1;
 			srcIndex = 1;
 
