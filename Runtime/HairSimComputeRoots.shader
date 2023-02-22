@@ -21,6 +21,7 @@
 	{
 		float3 positionOS : POSITION;
 		float3 normalOS : NORMAL;
+		float4 tangentOS : TANGENT;
 	};
 
 	struct RootVaryings
@@ -38,23 +39,38 @@
 
 		// update material frame
 		{
-		#if 1
-			// perturb initial local frame
-			float3 localRootReference = QMul(_InitialRootFrame[strandIndex], float3(0.0, 1.0, 0.0));
-			float4 localRootFrame = MakeQuaternionFromTo(localRootReference, attribs.normalOS);
-		#else
-			float4 localRootFrame = MakeQuaternionIdentity();
-		#endif
+			if(_UseTangentForRootFrame != 1)
+			{
+			#if 1
+				// perturb initial local frame
+				float3 localRootReference = QMul(_InitialRootFrame[strandIndex], float3(0.0, 1.0, 0.0));
+				float4 localRootFrame = MakeQuaternionFromTo(localRootReference, attribs.normalOS);
+			#else
+				float4 localRootFrame = MakeQuaternionIdentity();
+			#endif
 
-		#if 1
-			// add twist from skinning delta
-			float4 skinningBoneLocalDelta = QMul(_RootRotationInv, _WorldRotation);
-			float4 skinningBoneLocalTwist = QDecomposeTwist(skinningBoneLocalDelta, attribs.normalOS);
-			localRootFrame = QMul(skinningBoneLocalTwist, localRootFrame);
-		#endif
+			#if 1
+				// add twist from skinning delta
+				float4 skinningBoneLocalDelta = QMul(_RootRotationInv, _WorldRotation);
+				float4 skinningBoneLocalTwist = QDecomposeTwist(skinningBoneLocalDelta, attribs.normalOS);
+				localRootFrame = QMul(skinningBoneLocalTwist, localRootFrame);
+			#endif
 
-			// done
-			_UpdatedRootFrame[strandIndex] = normalize(QMul(_RootRotation, localRootFrame));
+				// done
+				_UpdatedRootFrame[strandIndex] = normalize(QMul(_RootRotation, localRootFrame));
+			}
+			else
+			{
+				float4 q = MakeQuaternionLookAt(attribs.tangentOS.xyz * attribs.tangentOS.w, attribs.normalOS);
+
+				float4 localRootFrame = QMul(q, QInverse(_InitialRootFrame[strandIndex]));
+	
+				// done
+				_UpdatedRootFrame[strandIndex] = normalize(QMul(_RootRotation, localRootFrame));
+			}
+
+			
+			
 		}
 
 		RootVaryings v;

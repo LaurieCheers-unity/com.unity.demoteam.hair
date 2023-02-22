@@ -80,7 +80,7 @@ namespace Unity.DemoTeam.Hair
 				public GameObject strandMeshContainer;
 				public MeshFilter strandMeshFilter;
 				public MeshRenderer strandMeshRenderer;
-#if HAS_PACKAGE_UNITY_HDRP_15_0_2
+#if HAS_HAIRRENDERER
 				public HDAdditionalMeshRendererSettings strandMeshRendererHDRP;
 #endif
 
@@ -182,9 +182,13 @@ namespace Unity.DemoTeam.Hair
 			[LineHeader("Renderer")]
 
 			public StrandRenderer strandRenderer;
-#if HAS_PACKAGE_UNITY_HDRP_15_0_2
-			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines), FormerlySerializedAs("strandRendererGroupingValue")]
-			public LineRendering.RendererGroup strandRendererGroup;
+#if HAS_HAIRRENDERER
+			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
+			public LineRendering.RendererGroup strandRendererGroupingValue;
+			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
+			public AnimationCurve strandRendererCameraDistanceLODCurve;
+			[Range(0.001f, 1f), VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
+			public float strandRendererShadingFraction;
 #endif
 			public ShadowCastingMode strandShadows;
 			[RenderingLayerMask]
@@ -223,8 +227,10 @@ namespace Unity.DemoTeam.Hair
 				kLODBlending = false,
 
 				strandRenderer = StrandRenderer.BuiltinLines,
-#if HAS_PACKAGE_UNITY_HDRP_15_0_2
-				strandRendererGroup = LineRendering.RendererGroup.None,
+#if HAS_HAIRRENDERER
+				strandRendererGroupingValue = LineRendering.RendererGroup.None,
+				strandRendererCameraDistanceLODCurve = AnimationCurve.Linear(0f, 1f, 10f, 0.2f),
+				strandRendererShadingFraction = 1f,
 #endif
 				strandShadows = ShadowCastingMode.On,
 				strandLayers = 0x0101,//TODO this is the HDRP default -- should decide based on active pipeline asset
@@ -368,20 +374,30 @@ namespace Unity.DemoTeam.Hair
 		public event Action<CommandBuffer> onSimulationStateChanged;
 		public event Action<CommandBuffer> onRenderingStateChanged;
 
+		private bool _disableSimulationAndRendering = false;//Project February - add option to disable all Enable/Update logic, effectively acting as if the HairInstance was disabled.
+
 		void OnEnable()
 		{
-			UpdateStrandGroupInstances();
-			UpdateStrandGroupHideFlags();
-			UpdateStrandGroupSettings();
+			_disableSimulationAndRendering = HairQualityLevelSettings.DisableHairInstanceFunctionality; 
 
-			s_instances.Add(this);
+			if (!_disableSimulationAndRendering)
+			{
+				UpdateStrandGroupInstances();
+				UpdateStrandGroupHideFlags();
+				UpdateStrandGroupSettings();
+
+				s_instances.Add(this);
+			}
 		}
 
 		void OnDisable()
 		{
-			ReleaseRuntimeData();
+			if (!_disableSimulationAndRendering)
+			{
+				ReleaseRuntimeData();
 
-			s_instances.Remove(this);
+				s_instances.Remove(this);
+			}
 		}
 
 		void OnValidate()
@@ -391,21 +407,24 @@ namespace Unity.DemoTeam.Hair
 
 		void OnDrawGizmos()
 		{
-			if (solverData == null)
-				return;
-
-			// volume bounds
-			var volumeCenter = HairSim.GetVolumeCenter(volumeData);
-			var volumeExtent = HairSim.GetVolumeExtent(volumeData);
-
-			Gizmos.color = Color.Lerp(Color.white, Color.clear, 0.5f);
-			Gizmos.DrawWireCube(volumeCenter, 2.0f * volumeExtent);
-
-			// volume gravity
-			for (int i = 0; i != solverData.Length; i++)
+			if (!_disableSimulationAndRendering)
 			{
-				Gizmos.color = Color.cyan;
-				Gizmos.DrawRay(volumeCenter, solverData[i].cbuffer._WorldGravity * 0.1f);
+				if (solverData == null)
+					return;
+
+				// volume bounds
+				var volumeCenter = HairSim.GetVolumeCenter(volumeData);
+				var volumeExtent = HairSim.GetVolumeExtent(volumeData);
+
+				Gizmos.color = Color.Lerp(Color.white, Color.clear, 0.5f);
+				Gizmos.DrawWireCube(volumeCenter, 2.0f * volumeExtent);
+
+				// volume gravity
+				for (int i = 0; i != solverData.Length; i++)
+				{
+					Gizmos.color = Color.cyan;
+					Gizmos.DrawRay(volumeCenter, solverData[i].cbuffer._WorldGravity * 0.1f);
+				}
 			}
 
 			/*
@@ -434,25 +453,28 @@ namespace Unity.DemoTeam.Hair
 
 		void OnDrawGizmosSelected()
 		{
-			if (strandGroupInstances == null)
-				return;
-
-			for (int i = 0; i != strandGroupInstances.Length; i++)
+			if (!_disableSimulationAndRendering)
 			{
-				ref readonly var strandGroupInstance = ref strandGroupInstances[i];
+				if (strandGroupInstances == null)
+					return;
 
-				// root bounds
-				var rootMeshFilter = strandGroupInstance.sceneObjects.rootMeshFilter;
-				if (rootMeshFilter != null)
+				for (int i = 0; i != strandGroupInstances.Length; i++)
 				{
-					var rootMesh = rootMeshFilter.sharedMesh;
-					if (rootMesh != null)
-					{
-						var rootBounds = rootMesh.bounds;
+					ref readonly var strandGroupInstance = ref strandGroupInstances[i];
 
-						Gizmos.color = Color.Lerp(Color.blue, Color.clear, 0.5f);
-						Gizmos.matrix = rootMeshFilter.transform.localToWorldMatrix;
-						Gizmos.DrawWireCube(rootBounds.center, rootBounds.size);
+					// root bounds
+					var rootMeshFilter = strandGroupInstance.sceneObjects.rootMeshFilter;
+					if (rootMeshFilter != null)
+					{
+						var rootMesh = rootMeshFilter.sharedMesh;
+						if (rootMesh != null)
+						{
+							var rootBounds = rootMesh.bounds;
+
+							Gizmos.color = Color.Lerp(Color.blue, Color.clear, 0.5f);
+							Gizmos.matrix = rootMeshFilter.transform.localToWorldMatrix;
+							Gizmos.DrawWireCube(rootBounds.center, rootBounds.size);
+						}
 					}
 				}
 
@@ -551,30 +573,39 @@ namespace Unity.DemoTeam.Hair
 
 		void Update()
 		{
-			UpdateStrandGroupInstances();
-			UpdateStrandGroupSettings();
-			UpdateAttachedState();
-			UpdatePrerequisite();
+			if (!_disableSimulationAndRendering)
+			{
+				UpdateStrandGroupInstances();
+				UpdateStrandGroupSettings();
+				UpdateAttachedState();
+				UpdatePrerequisite();
+			}
 		}
 
 		void LateUpdate()
 		{
-			HandlePrerequisite();
+			if (!_disableSimulationAndRendering)
+			{
+				HandlePrerequisite();
+			}
 		}
 
 		void LateUpdateInternal()
 		{
-			var cmd = CommandBufferPool.Get();
+			if (!_disableSimulationAndRendering)
 			{
-				if (InitializeRuntimeData(cmd))
+				var cmd = CommandBufferPool.Get();
 				{
-					UpdateSimulationLOD(cmd);
-					UpdateSimulationState(cmd);
-					UpdateRenderingState(cmd);
-					Graphics.ExecuteCommandBuffer(cmd);
+					if (InitializeRuntimeData(cmd))
+					{
+						UpdateSimulationLOD(cmd);
+						UpdateSimulationState(cmd);
+						UpdateRenderingState(cmd);
+						Graphics.ExecuteCommandBuffer(cmd);
+					}
 				}
+				CommandBufferPool.Release(cmd);
 			}
-			CommandBufferPool.Release(cmd);
 		}
 
 		enum StrandGroupInstancesStatus
@@ -1080,7 +1111,7 @@ namespace Unity.DemoTeam.Hair
 					var materialInstancePendingPasses = HairMaterialUtility.TryCompileCountPassesPending(materialInstance);
 					if (materialInstancePendingPasses > 0)
 					{
-						materialInstance.shader = HairMaterialUtility.GetReplacementShader(HairMaterialUtility.ReplacementType.Async);
+						CoreUtils.SetKeyword(materialInstance, "HAIR_VERTEX_ID_LINES", settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.BuiltinLines || settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHairRenderer);
 						UpdateMaterialState(materialInstance, settingsSystem, settingsStrands, solverData, volumeData);
 					}
 #endif
@@ -1111,6 +1142,7 @@ namespace Unity.DemoTeam.Hair
 						}
 						break;
 
+					case SettingsSystem.StrandRenderer.HDRPHairRenderer:
 					case SettingsSystem.StrandRenderer.BuiltinLines:
 					case SettingsSystem.StrandRenderer.HDRPHighQualityLines:
 						{
@@ -1166,7 +1198,7 @@ namespace Unity.DemoTeam.Hair
 				meshRenderer.renderingLayerMask = (uint)settingsSystem.strandLayers;
 				meshRenderer.motionVectorGenerationMode = settingsSystem.motionVectors;
 
-#if HAS_PACKAGE_UNITY_HDRP_15_0_2
+#if HAS_HAIRRENDERER
 				ref var meshRendererHDRP = ref strandGroupInstance.sceneObjects.strandMeshRendererHDRP;
 				{
 					if (meshRendererHDRP == null)
@@ -1183,28 +1215,24 @@ namespace Unity.DemoTeam.Hair
 					meshRendererHDRP.enableHighQualityLineRendering = (settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHighQualityLines);
 				}
 #endif
-			}
-
-			// update renderer bounds
-			{
-#if UNITY_2021_2_OR_NEWER
-				// starting with 2021.2 we can override renderer bounds directly
-				meshRenderer.bounds = GetSimulationBounds();
-#else
+				var meshRendererEnabled = false;
+#if HAS_PACKAGE_UNITY_HDRP_15
+							meshRendererHDRP.enabled = meshRendererHDRPEnabled = true;
+							meshRendererHDRP.mesh = meshInstance;
+							//meshRendererHDRP.rasterMode = settingsSystem.strandRendererMode;
+							meshRendererHDRP.renderingLayerMask = (uint)settingsSystem.strandLayers;
+							meshRendererHDRP.groupMerging = settingsSystem.strandRendererGrouping;
+						}
 				// prior to 2021.2 it was only possible to set renderer bounds indirectly via mesh bounds
 				if (mesh != null && meshShared == false)
 					mesh.bounds = GetSimulationBounds().WithTransform(meshFilter.transform.worldToLocalMatrix);
-
+						break;
 				//TODO provide better local bounds
 				//mesh.bounds = GetSimulationBounds(worldSquare: false, worldToLocalTransform: meshFilter.transform.worldToLocalMatrix);
-#endif
-			}
 		}
-
-		static void UpdateMaterialState(Material materialInstance, in SettingsSystem settingsSystem, in SettingsStrands settingsStrands, in HairSim.SolverData solverData, in HairSim.VolumeData volumeData)
-		{
-			HairSim.BindSolverData(materialInstance, solverData);
-			HairSim.BindVolumeData(materialInstance, volumeData);
+#if HAS_PACKAGE_UNITY_HDRP_15
+					meshRendererHDRP.enabled = false;
+					meshRendererHDRP.shadowCastingMode = ShadowCastingMode.Off;
 
 			materialInstance.SetTexture("_UntypedVolumeDensity", volumeData.volumeDensity);
 			materialInstance.SetTexture("_UntypedVolumeVelocity", volumeData.volumeVelocity);
@@ -1487,6 +1515,14 @@ namespace Unity.DemoTeam.Hair
 			HairSim.DrawVolumeData(cmd, volumeData, settingsDebug);
 		}
 
+		void EnsureTangents(Mesh m)
+		{
+			if (m.HasVertexAttribute(VertexAttribute.Tangent)) return;
+			
+			HairInstanceBuilder.GenerateTangents(m);
+			
+		}
+		
 		bool InitializeRuntimeData(CommandBuffer cmd)
 		{
 			var status = CheckStrandGroupInstances();
@@ -1592,6 +1628,7 @@ namespace Unity.DemoTeam.Hair
 				}
 
 				var rootMesh = strandGroupInstances[i].sceneObjects.rootMeshFilter.sharedMesh;
+				EnsureTangents(rootMesh);
 				var rootTransform = strandGroupInstances[i].sceneObjects.rootMeshFilter.transform.localToWorldMatrix;
 				var rootSkinningRotation = GetRootSkinningRotation(strandGroupInstances[i]);
 
@@ -1603,7 +1640,7 @@ namespace Unity.DemoTeam.Hair
 				HairSim.PushSolverParams(cmd, ref solverData[i], GetSettingsSolver(strandGroupInstances[i]), rootTransform, rootSkinningRotation, strandDiameter, strandMargin, strandScale, 1.0f);
 				HairSim.PushSolverRoots(cmd, ref solverData[i], rootMesh);
 				{
-					HairSim.InitSolverData(cmd, solverData[i]);
+					HairSim.InitSolverData(cmd, rootMesh, solverData[i]);
 				}
 
 				//TODO clean this up (currently necessary for full initialization of root buffers)

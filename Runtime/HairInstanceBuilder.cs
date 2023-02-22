@@ -106,6 +106,9 @@ namespace Unity.DemoTeam.Hair
 						strandGroupInstance.sceneObjects.rootMeshFilter = CreateComponent<MeshFilter>(strandGroupInstance.sceneObjects.rootMeshContainer, hideFlags);
 						strandGroupInstance.sceneObjects.rootMeshFilter.sharedMesh = strandGroups[j].meshAssetRoots;
 
+						Mesh rootMesh = strandGroupInstance.sceneObjects.rootMeshFilter.sharedMesh;
+						GenerateTangents(rootMesh);
+
 #if HAS_PACKAGE_DEMOTEAM_DIGITALHUMAN
 						strandGroupInstance.sceneObjects.rootMeshAttachment = CreateComponent<SkinAttachment>(strandGroupInstance.sceneObjects.rootMeshContainer, hideFlags);
 						strandGroupInstance.sceneObjects.rootMeshAttachment.attachmentType = SkinAttachment.AttachmentType.Mesh;
@@ -119,7 +122,7 @@ namespace Unity.DemoTeam.Hair
 						strandGroupInstance.sceneObjects.strandMeshFilter = CreateComponent<MeshFilter>(strandGroupInstance.sceneObjects.strandMeshContainer, hideFlags);
 						strandGroupInstance.sceneObjects.strandMeshRenderer = CreateComponent<MeshRenderer>(strandGroupInstance.sceneObjects.strandMeshContainer, hideFlags);
 
-#if HAS_PACKAGE_UNITY_HDRP_15_0_2
+#if HAS_PACKAGE_UNITY_HDRP_15
 						strandGroupInstance.sceneObjects.strandMeshRendererHDRP = CreateComponent<HDAdditionalMeshRendererSettings>(strandGroupInstance.sceneObjects.strandMeshContainer, hideFlags);
 #endif
 					}
@@ -136,6 +139,48 @@ namespace Unity.DemoTeam.Hair
 		//--------
 		// meshes
 
+		public static void GenerateTangents(Mesh m)
+		{
+			if (m.HasVertexAttribute(VertexAttribute.TexCoord0))
+			{
+				m.RecalculateTangents();
+			}
+			else
+			{
+				Vector3[] normals = m.normals;
+				Vector4[] tangents = new Vector4[normals.Length];
+
+				for (int i = 0; i < normals.Length; ++i)
+				{
+					Vector3 normal = normals[i];
+					Vector3 normalAbs = new Vector3(Mathf.Abs(normal.x), Mathf.Abs(normal.y), Mathf.Abs(normal.z));
+					if (normalAbs.x <= normalAbs.y && normalAbs.x <= normalAbs.z)
+					{
+						normal.x = 0;
+						normal.y = -normal.y;
+						CoreUtils.Swap(ref normal.y, ref normal.z);
+					} 
+					else if (normalAbs.y <= normalAbs.x && normalAbs.y <= normalAbs.z)
+					{
+						normal.y = 0;
+						normal.x = -normal.x;
+						CoreUtils.Swap(ref normal.x, ref normal.z);
+					}
+					else
+					{
+						normal.z = 0;
+						normal.y = -normal.y;
+						CoreUtils.Swap(ref normal.x, ref normal.y);
+					}
+
+					tangents[i] = new Vector4(normal.x, normal.y, normal.z, 1.0f);
+				}
+
+				m.tangents = tangents;
+			}
+			
+		}
+		
 		public static unsafe void BuildMeshRoots(Mesh meshRoots, int strandCount, Vector3[] rootPosition, Vector3[] rootDirection)
 		{
 			using (var indices = new NativeArray<int>(strandCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory))
@@ -296,13 +341,13 @@ namespace Unity.DemoTeam.Hair
 						//  :  .   :
 						//  |,     |
 						//  4------5
-						//  |    ,´|
-						//  |  ,´  |      etc.
-						//  |,´    |    
+						//  |    ,ï¿½|
+						//  |  ,ï¿½  |      etc.
+						//  |,ï¿½    |    
 						//  2------3    12----13
-						//  |    ,´|    |    ,´|
-						//  |  ,´  |    |  ,´  |
-						//  |,´    |    |,´    |
+						//  |    ,ï¿½|    |    ,ï¿½|
+						//  |  ,ï¿½  |    |  ,ï¿½  |
+						//  |,ï¿½    |    |,ï¿½    |
 						//  0------1    10----11
 						//  .
 						//  |

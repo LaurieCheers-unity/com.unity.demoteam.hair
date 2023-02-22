@@ -148,9 +148,9 @@ namespace Unity.DemoTeam.Hair
 			public float _GlobalRotation;
 			public float _GlobalFadeOffset;
 			public float _GlobalFadeExtent;
+			public uint _UseTangentForRootFrame;
 
-			// 78 --> 80 (pad to 16 byte boundary)
-			public float _scbpad1;
+			// 79 --> 80 (pad to 16 byte boundary)
 			public float _scbpad2;
 		}
 

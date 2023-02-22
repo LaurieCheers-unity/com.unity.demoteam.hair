@@ -74,6 +74,11 @@
             "name": "com.unity.collections",
             "expression": "[2.0.0,2.2.0-preview.20)",
             "define": "HAS_PACKAGE_UNITY_COLLECTIONS_2_0_0_UNTIL_2_2_0_PREVIEW_20"
+        },
+	{
+            "name": "com.unity.render-pipelines.high-definition",
+            "expression": "1.0.0",
+            "define": "HAS_HAIRRENDERER"
         }
     ],
     "noEngineReferences": false

@@ -81,6 +81,9 @@ namespace Unity.DemoTeam.Hair
 			public static int _VertexBufferNormal;
 			public static int _VertexBufferNormalOffset;
 			public static int _VertexBufferNormalStride;
+			public static int _VertexBufferTangent;
+			public static int _VertexBufferTangentOffset;
+			public static int _VertexBufferTangentStride;
 
 			public static int _RootUV;
 			public static int _RootScale;
@@ -152,6 +155,7 @@ namespace Unity.DemoTeam.Hair
 		static class SolverKernels
 		{
 			public static int KInitialize;
+			public static int KInitializeRoots;
 			public static int KInitializePostVolume;
 			public static int KUpdateRoots;
 			public static int KSubstepRoots;
@@ -307,6 +311,9 @@ namespace Unity.DemoTeam.Hair
 			[ToggleGroupItem(withLabel = true), Range(0.0f, 1.0f), Tooltip("Normalized fade extent (normalized distance from specified offset)")]
 			public float globalFadeExtent;
 
+			[LineHeader("Experimental")] 
+			public bool useTangentsForRootFrameResolve;
+			
 			public static readonly SolverSettings defaults = new SolverSettings()
 			{
 				method = Method.GaussSeidel,
@@ -348,6 +355,7 @@ namespace Unity.DemoTeam.Hair
 				globalFade = false,
 				globalFadeOffset = 0.1f,
 				globalFadeExtent = 0.2f,
+				useTangentsForRootFrameResolve = false
 			};
 		}
 
@@ -966,6 +974,7 @@ namespace Unity.DemoTeam.Hair
 			cbuffer._GlobalRotation = solverSettings.globalRotationInfluence;
 			cbuffer._GlobalFadeOffset = solverSettings.globalFade ? solverSettings.globalFadeOffset : 1e9f;
 			cbuffer._GlobalFadeExtent = solverSettings.globalFade ? solverSettings.globalFadeExtent : 1e9f;
+			cbuffer._UseTangentForRootFrame = solverSettings.useTangentsForRootFrameResolve ? 1u : 0u;
 
 			// derive features
 			SolverFeatures features = 0;
@@ -1114,9 +1123,14 @@ namespace Unity.DemoTeam.Hair
 				var normalStream = rootMesh.GetVertexAttributeStream(VertexAttribute.Normal);
 				var normalOffset = rootMesh.GetVertexAttributeOffset(VertexAttribute.Normal);
 				var normalStride = rootMesh.GetVertexBufferStride(normalStream);
+				
+				var tangentStream = rootMesh.GetVertexAttributeStream(VertexAttribute.Tangent);
+				var tangentOffset = rootMesh.GetVertexAttributeOffset(VertexAttribute.Tangent);
+				var tangentStride = rootMesh.GetVertexBufferStride(tangentStream);
 
 				using (GraphicsBuffer vertexBufferPosition = rootMesh.GetVertexBuffer(positionStream))
 				using (GraphicsBuffer vertexBufferNormal = rootMesh.GetVertexBuffer(normalStream))
+				using (GraphicsBuffer vertexBufferTangent = rootMesh.GetVertexBuffer(tangentStream))
 				{
 					int numX = ((int)solverData.cbuffer._StrandCount + PARTICLE_GROUP_SIZE - 1) / PARTICLE_GROUP_SIZE;
 					int numY = 1;
@@ -1124,11 +1138,14 @@ namespace Unity.DemoTeam.Hair
 
 					cmd.SetComputeBufferParam(s_solverCS, SolverKernels.KUpdateRoots, UniformIDs._VertexBufferPosition, vertexBufferPosition);
 					cmd.SetComputeBufferParam(s_solverCS, SolverKernels.KUpdateRoots, UniformIDs._VertexBufferNormal, vertexBufferNormal);
+					cmd.SetComputeBufferParam(s_solverCS, SolverKernels.KUpdateRoots, UniformIDs._VertexBufferTangent, vertexBufferTangent);
 
 					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferPositionOffset, positionOffset);
 					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferPositionStride, positionStride);
 					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferNormalOffset, normalOffset);
 					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferNormalStride, normalStride);
+					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferTangentOffset, tangentOffset);
+					cmd.SetComputeIntParam(s_solverCS, UniformIDs._VertexBufferTangentStride, tangentStride);
 
 					BindSolverData(cmd, s_solverCS, SolverKernels.KUpdateRoots, solverData);
 					cmd.DispatchCompute(s_solverCS, SolverKernels.KUpdateRoots, numX, numY, numZ);
@@ -1416,14 +1433,44 @@ namespace Unity.DemoTeam.Hair
 			PushConstantBufferData(cmd, volumeData.cbufferStorage, volumeData.cbuffer);
 		}
 
-		public static void InitSolverData(CommandBuffer cmd, in SolverData solverData)
+		public static void InitSolverData(CommandBuffer cmd, Mesh rootMesh, in SolverData solverData)
 		{
-			int numX = ((int)solverData.cbuffer._StrandCount + PARTICLE_GROUP_SIZE - 1) / PARTICLE_GROUP_SIZE;
-			int numY = 1;
-			int numZ = 1;
+			{
+				int numX = ((int)solverData.cbuffer._StrandCount + PARTICLE_GROUP_SIZE - 1) / PARTICLE_GROUP_SIZE;
+				int numY = 1;
+				int numZ = 1;
 
-			BindSolverData(cmd, s_solverCS, SolverKernels.KInitialize, solverData);
-			cmd.DispatchCompute(s_solverCS, SolverKernels.KInitialize, numX, numY, numZ);
+				BindSolverData(cmd, s_solverCS, SolverKernels.KInitialize, solverData);
+				cmd.DispatchCompute(s_solverCS, SolverKernels.KInitialize, numX, numY, numZ);
+			}
+
+			{
+				GraphicsBuffer normalBuffer = rootMesh.GetVertexBuffer(rootMesh.GetVertexAttributeStream(VertexAttribute.Normal));
+				GraphicsBuffer tangentBuffer = rootMesh.GetVertexBuffer(rootMesh.GetVertexAttributeStream(VertexAttribute.Tangent));
+
+				int[] stridesAndOffsets = new[]
+				{
+					rootMesh.GetVertexBufferStride(rootMesh.GetVertexAttributeStream(VertexAttribute.Normal)),
+					rootMesh.GetVertexAttributeOffset(VertexAttribute.Normal),
+					rootMesh.GetVertexBufferStride(rootMesh.GetVertexAttributeStream(VertexAttribute.Tangent)),
+					rootMesh.GetVertexAttributeOffset(VertexAttribute.Tangent),
+				};
+				
+				
+				int numX = ((int)solverData.cbuffer._StrandCount + PARTICLE_GROUP_SIZE - 1) / PARTICLE_GROUP_SIZE;
+				int numY = 1;
+				int numZ = 1;
+				
+				cmd.SetComputeBufferParam(s_solverCS, SolverKernels.KInitializeRoots, "_RootNormalBuffer", normalBuffer);
+				cmd.SetComputeBufferParam(s_solverCS, SolverKernels.KInitializeRoots, "_RootTangentBuffer", tangentBuffer);
+				cmd.SetComputeIntParams(s_solverCS, "_RootNormalTangentStrideOffset", stridesAndOffsets);
+
+				BindSolverData(cmd, s_solverCS, SolverKernels.KInitializeRoots, solverData);
+				cmd.DispatchCompute(s_solverCS, SolverKernels.KInitializeRoots, numX, numY, numZ);
+				
+				normalBuffer.Release();
+				tangentBuffer.Release();
+			}
 		}
 
 		public static void InitSolverDataPostVolume(CommandBuffer cmd, in SolverData solverData, in VolumeData volumeData)
