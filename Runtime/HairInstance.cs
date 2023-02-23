@@ -185,7 +185,8 @@ namespace Unity.DemoTeam.Hair
 #if HAS_HAIRRENDERER
 			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines), FormerlySerializedAs("strandRendererGroupingValue")]
 			public LineRendering.RendererGroup strandRendererGroup;
-			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
+            public LineRendering.RendererGroup strandRendererGroupingValue { get => strandRendererGroup; set => strandRendererGroup = value; }
+            [VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
 			public AnimationCurve strandRendererCameraDistanceLODCurve;
 			[Range(0.001f, 1f), VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
 			public float strandRendererShadingFraction;
