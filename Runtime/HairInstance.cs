@@ -183,8 +183,8 @@ namespace Unity.DemoTeam.Hair
 
 			public StrandRenderer strandRenderer;
 #if HAS_HAIRRENDERER
-			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
-			public LineRendering.RendererGroup strandRendererGroupingValue;
+			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines), FormerlySerializedAs("strandRendererGroupingValue")]
+			public LineRendering.RendererGroup strandRendererGroup;
 			[VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
 			public AnimationCurve strandRendererCameraDistanceLODCurve;
 			[Range(0.001f, 1f), VisibleIf(nameof(strandRenderer), StrandRenderer.HDRPHighQualityLines)]
@@ -228,7 +228,7 @@ namespace Unity.DemoTeam.Hair
 
 				strandRenderer = StrandRenderer.BuiltinLines,
 #if HAS_HAIRRENDERER
-				strandRendererGroupingValue = LineRendering.RendererGroup.None,
+				strandRendererGroup = LineRendering.RendererGroup.None,
 				strandRendererCameraDistanceLODCurve = AnimationCurve.Linear(0f, 1f, 10f, 0.2f),
 				strandRendererShadingFraction = 1f,
 #endif
@@ -1212,7 +1212,7 @@ namespace Unity.DemoTeam.Hair
 					meshRendererHDRP.enabled = true;
 					meshRendererHDRP.enableHighQualityLineRendering = (settingsSystem.strandRenderer == SettingsSystem.StrandRenderer.HDRPHighQualityLines);
 
-					meshRendererHDRP.rendererGroup = settingsSystem.strandRendererGroupingValue;
+					meshRendererHDRP.rendererGroup = settingsSystem.strandRendererGroup;
 					meshRendererHDRP.rendererLODMode = LineRendering.RendererLODMode.CameraDistance;
 					meshRendererHDRP.rendererLODCameraDistanceCurve = settingsSystem.strandRendererCameraDistanceLODCurve;
 					meshRendererHDRP.shadingSampleFraction = settingsSystem.strandRendererShadingFraction;
